@@ -9,9 +9,9 @@ from sklearn.preprocessing import LabelEncoder
 
 st.set_page_config(page_title="Credit Card Growth Prediction", layout="wide")
 st.title("📉 Predict Credit Card Net Growth Impact (India 2020–2025)")
-st.write("This app uses a pre-trained Lasso model with RFE-selected features to predict Net Growth Impact based on user input.")
+st.write("This app uses a pre-trained Lasso model with RFE-selected features to predict Net Growth Impact.")
 
-# Load raw data (used for encoders and value ranges)
+# Load raw data for preprocessing and encoders
 @st.cache_data
 def load_data():
     df = pd.read_csv("credit_card_growth_slowdown_india_2020_2025.csv")
@@ -28,29 +28,36 @@ def load_data():
 
     return df, label_encoders
 
-# Load model
+# Load model and feature list
 @st.cache_resource
 def load_model():
     with open("model.pkl", "rb") as f:
         return pickle.load(f)
 
-# Load selected features list
 @st.cache_data
 def load_feature_list():
     with open("features.json", "r") as f:
         return json.load(f)
 
-# Load everything
 model = load_model()
 features = load_feature_list()
 df_num, label_encoders = load_data()
 
-st.markdown("### 🧾 Enter Your Input Data")
+# 🔍 Debug output
+st.markdown("### 🛠️ Debug Info (Temporary)")
+st.write("📌 Features expected by model (`features.json`):", features)
+st.write("📄 Columns available in preprocessed dataset:", df_num.columns.tolist())
 
-# Create input form
+st.markdown("### 🧾 Enter Input for Prediction")
+
+# Collect input
 input_data = {}
 with st.form("prediction_form"):
     for feature in features:
+        if feature not in df_num.columns:
+            st.error(f"❌ Feature '{feature}' not found in dataset. Please fix your features.json or preprocessing.")
+            continue  # Skip missing feature
+        
         if feature in label_encoders:
             labels = list(label_encoders[feature].classes_)
             selected_label = st.selectbox(f"{feature}", labels)
@@ -73,5 +80,9 @@ with st.form("prediction_form"):
 # Predict
 if submit:
     input_df = pd.DataFrame([input_data])
-    prediction = model.predict(input_df)[0]
-    st.success(f"✅ Predicted Net Growth Impact: **{prediction:.2f}**")
+    
+    if len(input_df.columns) != len(features):
+        st.error("❌ Input does not match the required number of features. Check warnings above.")
+    else:
+        prediction = model.predict(input_df)[0]
+        st.success(f"✅ Predicted Net Growth Impact: **{prediction:.2f}**")
