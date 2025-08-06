@@ -8,7 +8,6 @@ from sklearn.preprocessing import LabelEncoder
 
 st.set_page_config(page_title="Credit Card Net Growth Prediction", layout="wide")
 st.title("📊 Predict Net Growth Impact of Credit Cards (India 2020–2025)")
-
 st.write("This app uses a trained Lasso model with RFE to predict the net growth impact based on customer and credit information.")
 
 # ----------------------------
@@ -35,9 +34,8 @@ def load_data_and_encoders():
 
     # Label encode categorical columns
     label_encoders = {}
-    categorical_cols = df.select_dtypes(include='object').columns
-
-    for col in categorical_cols:
+    cat_cols = df.select_dtypes(include='object').columns
+    for col in cat_cols:
         le = LabelEncoder()
         df[col] = le.fit_transform(df[col].astype(str))
         label_encoders[col] = le
@@ -51,12 +49,6 @@ features = load_features()
 df, label_encoders = load_data_and_encoders()
 
 # ----------------------------
-# Debug: Show column match (optional)
-# st.markdown("### 🛠 Debug Info")
-# st.write("Model expects features:", features)
-# st.write("Available columns:", df.columns.tolist())
-
-# ----------------------------
 # Build input form
 st.markdown("### ✍️ Enter Input Data")
 input_data = {}
@@ -64,21 +56,20 @@ input_data = {}
 with st.form("input_form"):
     for feature in features:
         if feature not in df.columns:
-            st.error(f"❌ Feature '{feature}' not found in dataset. Check preprocessing.")
+            st.warning(f"⚠️ Feature '{feature}' not found in dataset. Skipping.")
             continue
 
         if feature in label_encoders:
-            # Show dropdown for categorical variables
-            classes = list(label_encoders[feature].classes_)
-            selected = st.selectbox(f"{feature}", classes)
+            # Dropdown for categorical features
+            options = list(label_encoders[feature].classes_)
+            selected = st.selectbox(f"{feature}", options)
             encoded = label_encoders[feature].transform([selected])[0]
             input_data[feature] = encoded
         else:
-            # Show numeric input
-            col_data = df[feature]
-            min_val = float(col_data.min())
-            max_val = float(col_data.max())
-            mean_val = float(col_data.mean())
+            # Numeric input
+            min_val = float(df[feature].min())
+            max_val = float(df[feature].max())
+            mean_val = float(df[feature].mean())
             input_data[feature] = st.number_input(
                 f"{feature}",
                 min_value=min_val,
@@ -89,16 +80,27 @@ with st.form("input_form"):
     submitted = st.form_submit_button("Predict")
 
 # ----------------------------
-# Run prediction
+# Predict safely
 if submitted:
     input_df = pd.DataFrame([input_data])
 
-    missing = [f for f in features if f not in input_df.columns]
-    if missing:
-        st.error(f"Missing required features: {missing}")
-    elif input_df.shape[1] != len(features):
-        st.error("Input does not match model's expected feature count.")
+    # Debug view (optional)
+    st.write("🔍 Input shape:", input_df.shape)
+    st.write("📋 Input columns:", input_df.columns.tolist())
+    st.write("📋 Expected features:", features)
+
+    # Validate input
+    missing_features = [f for f in features if f not in input_df.columns]
+    extra_features = [f for f in input_df.columns if f not in features]
+
+    if missing_features:
+        st.error(f"❌ Missing required features: {missing_features}")
     else:
-        input_df = input_df[features]  # Ensure correct order
-        prediction = model.predict(input_df)[0]
-        st.success(f"✅ Predicted Net Growth Impact: **{prediction:.2f}**")
+        # Ensure feature order and only required features
+        input_df = input_df[features]
+        try:
+            prediction = model.predict(input_df)[0]
+            st.success(f"✅ Predicted Net Growth Impact: **{prediction:.2f}**")
+        except Exception as e:
+            st.error("❌ Prediction failed. Please check your input.")
+            st.exception(e)
